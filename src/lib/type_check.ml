@@ -4194,6 +4194,28 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
       | _ -> Reporting.unreachable l __POS__ "unifying mapping type, expanded synonyms to non-mapping type!"
     end
   | MP_app (other, mpats) when Env.is_mapping other env ->
+    let typq, mapping_typ = Env.get_val_spec other env in
+
+    let typ1 =
+      match Env.expand_synonyms env mapping_typ with
+      | Typ_aux (Typ_bidir (typ1, _), _) -> begin
+        (typ1)
+      end
+      | _ -> typ_error l (string_of_typ typ ^ " is not a function type")
+    in
+
+    let typ_args = 
+      match Env.expand_synonyms env typ1 with
+      | Typ_aux (Typ_tuple typ_args, _) -> typ_args;
+      | _ -> typ_error l (string_of_typ typ ^ " is not a function type")
+    in
+
+    if not (List.length typ_args == List.length mpats) then
+      typ_error l
+        (Printf.sprintf "Mapping %s applied to %d args, expected %d: %s" (string_of_id other)
+          (List.length mpats) (List.length typ_args)
+          (String.concat ", " (List.map string_of_typ typ_args))
+        );
       bind_mpat allow_unknown other_env env (MP_aux (MP_app (other, [mk_mpat (MP_tuple mpats)]), (l, uannot))) typ
   | MP_app (f, _) when not (Env.is_union_constructor f env || Env.is_mapping f env) ->
       typ_error l (string_of_id f ^ " is not a union constructor or mapping in mapping-pattern " ^ string_of_mpat mpat)
